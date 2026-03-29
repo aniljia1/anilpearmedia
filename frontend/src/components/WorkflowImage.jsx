@@ -20,13 +20,14 @@ export default function WorkflowImage() {
     }
   };
 
+  const API = import.meta.env.VITE_API_URL;
   // 🔥 Analyze Image (mock or backend)
   const handleAnalyze = async () => {
     if (!preview) return;
 
     setIsLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/image/analyze", {
+      const res = await fetch(`${API}/api/image/analyze`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -49,7 +50,7 @@ export default function WorkflowImage() {
 
     setIsLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/image/generate", {
+      const res = await fetch(`${API}/api/image/generate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
