@@ -20,7 +20,7 @@ export const generateImage = async (req, res) => {
             Accept: "image/png",
           },
           responseType: "arraybuffer",
-          timeout: 30000,
+          timeout: 60000,
         },
       );
     } catch (err) {
