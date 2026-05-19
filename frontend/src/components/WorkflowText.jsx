@@ -8,18 +8,32 @@ export default function WorkflowText() {
   const [enhanced, setEnhanced] = useState("");
   const [image, setImage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleEnhance = async () => {
     setLoading(true);
+    setError("");
     const result = await enhancePromptAPI(input);
-    setEnhanced(result);
+
+    if (result?.error) {
+      setError(result.error);
+    } else {
+      setEnhanced(typeof result === "string" ? result : result?.data || "");
+    }
     setLoading(false);
   };
 
   const handleGenerate = async () => {
     setLoading(true);
-    const img = await generateImageAPI(enhanced);
-    setImage(img);
+    setError("");
+    const result = await generateImageAPI(enhanced);
+
+    if (result?.error) {
+      setError(result.error);
+    } else {
+      // Handle both plain base64 string and { data: "..." } shape
+      setImage(typeof result === "string" ? result : result?.data || "");
+    }
     setLoading(false);
   };
 
@@ -45,16 +59,21 @@ export default function WorkflowText() {
 
       {loading && <Loader />}
 
+      {/* Error Message */}
+      {error && (
+        <div className="mt-4 p-3 bg-red-100 text-red-700 rounded-xl text-sm">
+          ⚠️ {error}
+        </div>
+      )}
+
       {enhanced && (
         <>
           <h3 className="mt-6 font-semibold">Enhanced Prompt</h3>
-
           <textarea
             value={enhanced}
             onChange={(e) => setEnhanced(e.target.value)}
             className="w-full p-3 border rounded-xl mt-2"
           />
-
           <button
             onClick={handleGenerate}
             className="mt-4 w-full bg-purple-600 text-white py-2 rounded-xl hover:bg-purple-700"
