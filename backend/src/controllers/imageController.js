@@ -18,9 +18,9 @@ export const generateImage = async (req, res) => {
     let response;
 
     try {
-      // Try new router endpoint first
+      // Primary: stable-diffusion-v1-5 (faster, more reliable on free tier)
       response = await axios.post(
-        "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0",
+        "https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5",
         { inputs: prompt },
         {
           headers: {
@@ -28,15 +28,15 @@ export const generateImage = async (req, res) => {
             Accept: "image/png",
           },
           responseType: "arraybuffer",
-          timeout: 60000, // increased to 60s for cold start
+          timeout: 60000,
         }
       );
     } catch (err) {
-      console.log("Router endpoint failed, trying fallback...", err.message);
+      console.log("Primary model failed, trying fallback...", err.message);
 
-      // Fallback to old inference endpoint
+      // Fallback: stable-diffusion-2-1
       response = await axios.post(
-        "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
+        "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1",
         { inputs: prompt },
         {
           headers: {
@@ -44,7 +44,7 @@ export const generateImage = async (req, res) => {
             Accept: "image/png",
           },
           responseType: "arraybuffer",
-          timeout: 90000, // longer timeout for fallback
+          timeout: 90000,
         }
       );
     }
@@ -94,7 +94,6 @@ export const analyzeImage = async (req, res) => {
       return res.status(500).json({ error: "Server misconfiguration: API key missing" });
     }
 
-    // Extract raw base64 (strip data URI prefix if present)
     const rawBase64 = base64.includes(",") ? base64.split(",")[1] : base64;
     const imageBuffer = Buffer.from(rawBase64, "base64");
 
