@@ -9,13 +9,10 @@ export const generateImage = async (req, res) => {
     }
 
     const HF_API_KEY = process.env.HF_API_KEY;
-
     if (!HF_API_KEY) {
-      console.error("HF_API_KEY is not set in environment variables");
       return res.status(500).json({ error: "Server misconfiguration: API key missing" });
     }
 
-    // Use HuggingFace router with FLUX.1-schnell (free, fast, works in 2026)
     const response = await axios.post(
       "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
       { inputs: prompt },
@@ -32,7 +29,6 @@ export const generateImage = async (req, res) => {
 
     const contentType = response.headers["content-type"];
 
-    // If HF returned JSON, it's an error
     if (contentType && contentType.includes("application/json")) {
       const errorData = JSON.parse(Buffer.from(response.data).toString("utf-8"));
       console.error("HF API Error:", errorData);
@@ -41,7 +37,6 @@ export const generateImage = async (req, res) => {
       });
     }
 
-    // Convert binary to base64
     const base64 = Buffer.from(response.data, "binary").toString("base64");
     const mimeType = contentType?.includes("jpeg") ? "image/jpeg" : "image/png";
     const image = `data:${mimeType};base64,${base64}`;
@@ -51,20 +46,10 @@ export const generateImage = async (req, res) => {
     console.error("HF Image Error:", error.message);
 
     if (error.code === "ECONNABORTED") {
-      return res.status(504).json({
-        error: "Image generation timed out. Please try again.",
-      });
+      return res.status(504).json({ error: "Image generation timed out. Please try again." });
     }
 
-    if (error.response?.status === 404) {
-      return res.status(500).json({
-        error: "Image model not available. Please contact support.",
-      });
-    }
-
-    res.status(500).json({
-      error: "Image generation failed. Please try again.",
-    });
+    res.status(500).json({ error: "Image generation failed. Please try again." });
   }
 };
 
@@ -77,7 +62,6 @@ export const analyzeImage = async (req, res) => {
     }
 
     const HF_API_KEY = process.env.HF_API_KEY;
-
     if (!HF_API_KEY) {
       return res.status(500).json({ error: "Server misconfiguration: API key missing" });
     }
@@ -85,6 +69,7 @@ export const analyzeImage = async (req, res) => {
     const rawBase64 = base64.includes(",") ? base64.split(",")[1] : base64;
     const imageBuffer = Buffer.from(rawBase64, "base64");
 
+    // Use router endpoint for BLIP (same fix as generate)
     const response = await axios.post(
       "https://router.huggingface.co/hf-inference/models/Salesforce/blip-image-captioning-large",
       imageBuffer,
@@ -97,9 +82,7 @@ export const analyzeImage = async (req, res) => {
       }
     );
 
-    const caption =
-      response.data?.[0]?.generated_text || "A detailed artistic scene";
-
+    const caption = response.data?.[0]?.generated_text || "A detailed artistic scene";
     res.json(caption);
   } catch (error) {
     console.error("HF Analyze Error:", error.message);
