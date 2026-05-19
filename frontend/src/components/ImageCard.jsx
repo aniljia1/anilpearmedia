@@ -1,6 +1,20 @@
 export default function ImageCard({ src }) {
   if (!src) return null;
 
+  const handleView = () => {
+    // Convert base64 to blob URL — Chrome can't render large data URLs directly
+    const byteString = atob(src.split(",")[1]);
+    const mimeType = src.split(",")[0].split(":")[1].split(";")[0];
+    const ab = new ArrayBuffer(byteString.length);
+    const ia = new Uint8Array(ab);
+    for (let i = 0; i < byteString.length; i++) {
+      ia[i] = byteString.charCodeAt(i);
+    }
+    const blob = new Blob([ab], { type: mimeType });
+    const blobUrl = URL.createObjectURL(blob);
+    window.open(blobUrl, "_blank");
+  };
+
   return (
     <div className="mt-6 bg-white/10 backdrop-blur-lg p-4 rounded-2xl shadow-xl border border-white/20">
       {/* Image */}
@@ -19,13 +33,15 @@ export default function ImageCard({ src }) {
           </button>
         </a>
 
-        {/* View Full */}
-        <a href={src} target="_blank">
-          <button className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg transition">
-            View
-          </button>
-        </a>
+        {/* View Full — opens as blob URL so Chrome renders it correctly */}
+        <button
+          onClick={handleView}
+          className="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-lg transition"
+        >
+          View
+        </button>
       </div>
     </div>
   );
 }
+
