@@ -15,43 +15,24 @@ export const generateImage = async (req, res) => {
       return res.status(500).json({ error: "Server misconfiguration: API key missing" });
     }
 
-    let response;
-
-    try {
-      // Primary: stable-diffusion-v1-5 (faster, more reliable on free tier)
-      response = await axios.post(
-        "https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5",
-        { inputs: prompt },
-        {
-          headers: {
-            Authorization: `Bearer ${HF_API_KEY}`,
-            Accept: "image/png",
-          },
-          responseType: "arraybuffer",
-          timeout: 60000,
-        }
-      );
-    } catch (err) {
-      console.log("Primary model failed, trying fallback...", err.message);
-
-      // Fallback: stable-diffusion-2-1
-      response = await axios.post(
-        "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1",
-        { inputs: prompt },
-        {
-          headers: {
-            Authorization: `Bearer ${HF_API_KEY}`,
-            Accept: "image/png",
-          },
-          responseType: "arraybuffer",
-          timeout: 90000,
-        }
-      );
-    }
+    // Use HuggingFace router with FLUX.1-schnell (free, fast, works in 2026)
+    const response = await axios.post(
+      "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell",
+      { inputs: prompt },
+      {
+        headers: {
+          Authorization: `Bearer ${HF_API_KEY}`,
+          "Content-Type": "application/json",
+          Accept: "image/jpeg",
+        },
+        responseType: "arraybuffer",
+        timeout: 90000,
+      }
+    );
 
     const contentType = response.headers["content-type"];
 
-    // If HF returned JSON, it's an error (e.g. model loading)
+    // If HF returned JSON, it's an error
     if (contentType && contentType.includes("application/json")) {
       const errorData = JSON.parse(Buffer.from(response.data).toString("utf-8"));
       console.error("HF API Error:", errorData);
@@ -62,7 +43,8 @@ export const generateImage = async (req, res) => {
 
     // Convert binary to base64
     const base64 = Buffer.from(response.data, "binary").toString("base64");
-    const image = `data:image/png;base64,${base64}`;
+    const mimeType = contentType?.includes("jpeg") ? "image/jpeg" : "image/png";
+    const image = `data:${mimeType};base64,${base64}`;
 
     res.json(image);
   } catch (error) {
@@ -70,7 +52,13 @@ export const generateImage = async (req, res) => {
 
     if (error.code === "ECONNABORTED") {
       return res.status(504).json({
-        error: "Image generation timed out. The model may be loading — please try again.",
+        error: "Image generation timed out. Please try again.",
+      });
+    }
+
+    if (error.response?.status === 404) {
+      return res.status(500).json({
+        error: "Image model not available. Please contact support.",
       });
     }
 
@@ -98,7 +86,7 @@ export const analyzeImage = async (req, res) => {
     const imageBuffer = Buffer.from(rawBase64, "base64");
 
     const response = await axios.post(
-      "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large",
+      "https://router.huggingface.co/hf-inference/models/Salesforce/blip-image-captioning-large",
       imageBuffer,
       {
         headers: {
