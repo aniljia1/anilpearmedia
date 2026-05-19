@@ -8,54 +8,59 @@ export const generateImage = async (req, res) => {
       return res.status(400).json({ error: "Prompt is required" });
     }
 
-    // 🔥 Try NEW endpoint first
+    const HF_API_KEY = process.env.HF_API_KEY;
+
+    if (!HF_API_KEY) {
+      console.error("HF_API_KEY is not set in environment variables");
+      return res.status(500).json({ error: "Server misconfiguration: API key missing" });
+    }
+
     let response;
+
     try {
+      // Try new router endpoint first
       response = await axios.post(
         "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0",
         { inputs: prompt },
         {
           headers: {
-            Authorization: `Bearer ${process.env.HF_API_KEY}`,
+            Authorization: `Bearer ${HF_API_KEY}`,
             Accept: "image/png",
           },
           responseType: "arraybuffer",
-          timeout: 20000,
-        },
+          timeout: 60000, // increased to 60s for cold start
+        }
       );
     } catch (err) {
-      console.log("Router failed, trying fallback...");
+      console.log("Router endpoint failed, trying fallback...", err.message);
 
-      // 🔥 FALLBACK to old endpoint
+      // Fallback to old inference endpoint
       response = await axios.post(
         "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
         { inputs: prompt },
         {
           headers: {
-            Authorization: `Bearer ${process.env.HF_API_KEY}`,
+            Authorization: `Bearer ${HF_API_KEY}`,
             Accept: "image/png",
           },
           responseType: "arraybuffer",
-        },
+          timeout: 90000, // longer timeout for fallback
+        }
       );
     }
 
     const contentType = response.headers["content-type"];
 
-    // Handle error response
-    if (contentType.includes("application/json")) {
-      const errorData = JSON.parse(
-        Buffer.from(response.data).toString("utf-8"),
-      );
-
+    // If HF returned JSON, it's an error (e.g. model loading)
+    if (contentType && contentType.includes("application/json")) {
+      const errorData = JSON.parse(Buffer.from(response.data).toString("utf-8"));
       console.error("HF API Error:", errorData);
-
-      return res.status(500).json({
-        error: errorData.error || "Model loading, try again",
+      return res.status(503).json({
+        error: errorData.error || "Model is loading, please try again in a moment",
       });
     }
 
-    // Convert to image
+    // Convert binary to base64
     const base64 = Buffer.from(response.data, "binary").toString("base64");
     const image = `data:image/png;base64,${base64}`;
 
@@ -63,8 +68,54 @@ export const generateImage = async (req, res) => {
   } catch (error) {
     console.error("HF Image Error:", error.message);
 
+    if (error.code === "ECONNABORTED") {
+      return res.status(504).json({
+        error: "Image generation timed out. The model may be loading — please try again.",
+      });
+    }
+
     res.status(500).json({
-      error: "Image generation failed",
+      error: "Image generation failed. Please try again.",
     });
+  }
+};
+
+export const analyzeImage = async (req, res) => {
+  try {
+    const { base64 } = req.body;
+
+    if (!base64) {
+      return res.status(400).json({ error: "Image data is required" });
+    }
+
+    const HF_API_KEY = process.env.HF_API_KEY;
+
+    if (!HF_API_KEY) {
+      return res.status(500).json({ error: "Server misconfiguration: API key missing" });
+    }
+
+    // Extract raw base64 (strip data URI prefix if present)
+    const rawBase64 = base64.includes(",") ? base64.split(",")[1] : base64;
+    const imageBuffer = Buffer.from(rawBase64, "base64");
+
+    const response = await axios.post(
+      "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large",
+      imageBuffer,
+      {
+        headers: {
+          Authorization: `Bearer ${HF_API_KEY}`,
+          "Content-Type": "application/octet-stream",
+        },
+        timeout: 30000,
+      }
+    );
+
+    const caption =
+      response.data?.[0]?.generated_text || "A detailed artistic scene";
+
+    res.json(caption);
+  } catch (error) {
+    console.error("HF Analyze Error:", error.message);
+    res.status(500).json({ error: "Image analysis failed. Please try again." });
   }
 };
